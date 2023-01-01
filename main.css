@@ -1,8 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
-	<style> 
-   /* Set the width and height of the issue boxes and center them horizontally and vertically */
+/* Set the width and height of the issue boxes and center them horizontally and vertically */
 .issue-box {
   width: 300px;
   height: 200px;
@@ -32,23 +28,4 @@
   color: blue;
   text-decoration: underline;
 }
-
-	</style>
-	<title>Issue List</title>
-</head>
-<body>
-	<h1>Good First Issue List</h1>
-
-	<p>
-		This page lists all issues labeled "good first issue" in the order in which they were created. Most recent first. Hope this helps someone!!
-	</p>
-	{{range .Issues}}
-		<div class="issue-title">
-			<h2 class="issue-title">{{.Title}} ocurring at {{.CreatedAt}}</h2>
-			<p class="issue-body">{{.Body}}</p>
-			<a class="issue-link" target="_blank" href="{{.Url}}">View on GitHub</a>
-		</div>
-	{{end}}
-</body>
-</html>
 

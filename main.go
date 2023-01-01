@@ -3,47 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/google/go-github/github"
+	"golang.org/x/oauth2"
 	"html/template"
+	"kube_a_day/sorting"
 	"log"
 	"net/http"
 	"os"
-
-	"golang.org/x/oauth2"
-
-	"github.com/google/go-github/github"
 )
 
-type IssueStub struct {
-	Title string
-	Body  string
-	Url   string
-	github.Label
-}
-
-func quicksort(repos []*github.Repository) []*github.Repository {
-	if len(repos) < 2 {
-		return repos
-	}
-
-	pivotIndex := len(repos) / 2
-	pivot := repos[pivotIndex]
-	repos = append(repos[:pivotIndex], repos[pivotIndex+1:]...)
-
-	less := []*github.Repository{}
-	greater := []*github.Repository{}
-
-	for _, repo := range repos {
-		if *repo.ForksCount > *pivot.ForksCount {
-			less = append(less, repo)
-		} else {
-			greater = append(greater, repo)
-		}
-	}
-
-	return append(append(quicksort(less), pivot), quicksort(greater)...)
-}
-
-func getGoodFirstIssues(org string) []IssueStub {
+func getGoodFirstIssues(org string) []sorting.IssueStub {
 	pat := os.Getenv("GITHUB_PAT")
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: pat},
@@ -59,73 +28,85 @@ func getGoodFirstIssues(org string) []IssueStub {
 		ListOptions: github.ListOptions{PerPage: 10},
 	}
 
-	// Set up the search criteria for issues
+	// Get issues for each repository that have the label good first issue
 	issueOpt := &github.IssueListByRepoOptions{
-		State:       "all",
-		ListOptions: github.ListOptions{PerPage: 10},
+		State:       "open",
+		Labels:      []string{"good first issue"},
+		ListOptions: github.ListOptions{PerPage: 100},
 	}
 
 	// Initialize an empty slice to store the issues
-	issues := []*github.Issue{}
+	issues := []sorting.IssueStub{}
 	// Set up a loop to retrieve all repositories in the organization
 	for {
 		// Perform the search for repositories
-		repos, _, err := client.Repositories.ListByOrg(context.Background(), org, repoOpt)
+		repos, resp, err := client.Repositories.ListByOrg(context.Background(), org, repoOpt)
 		if err != nil {
 			log.Fatal(err)
 		}
-		repos = quicksort(repos)
+		repos = sorting.Quicksort(repos)
 		// Iterate over the repositories
-		for i := 0; i < 10; i++ {
+		for i := 0; i < len(repos); i++ {
 			repo := repos[i]
 			// Set up a loop to retrieve all issues for the repository
-			// Perform the search for issues
-			result, resp, err := client.Issues.ListByRepo(context.Background(), org, *repo.Name, issueOpt)
-			if err != nil {
-				log.Fatal(err)
-			}
+			for {
+				// Perform the search for issues
+				result, resp, err := client.Issues.ListByRepo(context.Background(), org, *repo.Name, issueOpt)
+				if err != nil {
+					log.Fatal(err)
+				}
 
-			// Add the issues to the slice
-			issues = append(issues, result...)
+				for _, issue := range result {
+					// Add the issues to the slice
+					// check if this issue has pull requests associated with it
+					// if it does, skip it
+					// if it doesn't, add it to the List
 
-			// Check if there are more pages of results
-			if resp.NextPage == 0 {
-				break
+					// check how many pull requests are associated with this issue
+					if issue.PullRequestLinks == nil || *issue.PullRequestLinks.URL == "" && issue.Labels != nil && findTargetLabels(issue.Labels) {
+						issues = append(issues, sorting.IssueStub{
+							Title:     *issue.Title,
+							Body:      issue.GetBody(),
+							Url:       issue.GetHTMLURL(),
+							Labels:    issue.Labels,
+							CreatedAt: issue.GetCreatedAt(),
+						})
+						fmt.Println(*issue.Title)
+					}
+				}
+				// Check if there are more pages of results
+				if resp.NextPage == 0 {
+					break
+				}
+				issueOpt.Page = resp.NextPage
 			}
-			issueOpt.Page = resp.NextPage
 		}
 		// Check if there are more pages of results
-		break
+		if resp.NextPage == 0 {
+			break
+		}
+		repoOpt.Page = resp.NextPage
 	}
 
-	// Print the number of issues
-	fmt.Printf("Number of issues: %d\n", len(issues))
+	return sorting.MergeSort(issues)
+}
 
-	targetIssues := []IssueStub{}
-	// Print the issue details
-	for _, issue := range issues {
-		for _, label := range issue.Labels {
-			if *label.Name == "good first issue" {
-				newIssue := IssueStub{
-					Title: issue.GetTitle(),
-					Body:  issue.GetBody(),
-					Url:   *issue.HTMLURL,
-					Label: label,
-				}
-				targetIssues = append(targetIssues, newIssue)
-				break
-			}
+func findTargetLabels(labels []github.Label) bool {
+	for _, label := range labels {
+		if label.Name != nil && *label.Name == "good first issue" {
+			return true
 		}
 	}
-	return targetIssues
+	return false
 }
+
 func main() {
 	// k8sSigs := getGoodFirstIssues("kubernetes-sigs")
 	k8s := getGoodFirstIssues("kubernetes")
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Set up the data for the template
 		data := struct {
-			Issues []IssueStub
+			Issues []sorting.IssueStub
 		}{
 			Issues: k8s,
 		}
