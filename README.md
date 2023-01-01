@@ -18,5 +18,4 @@ go run main.go
 ```
 
 then you will have a list of github issues :) 
-
-![](https://ibb.co/Mf87QD4)
+[Screenshot-2023-01-01-at-10-17-48-AM.png](https://postimg.cc/LqKkD810)
