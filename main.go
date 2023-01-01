@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"golang.org/x/oauth2"
 
@@ -19,6 +18,29 @@ type IssueStub struct {
 	Body  string
 	Url   string
 	github.Label
+}
+
+func quicksort(repos []*github.Repository) []*github.Repository {
+	if len(repos) < 2 {
+		return repos
+	}
+
+	pivotIndex := len(repos) / 2
+	pivot := repos[pivotIndex]
+	repos = append(repos[:pivotIndex], repos[pivotIndex+1:]...)
+
+	less := []*github.Repository{}
+	greater := []*github.Repository{}
+
+	for _, repo := range repos {
+		if *repo.ForksCount > *pivot.ForksCount {
+			less = append(less, repo)
+		} else {
+			greater = append(greater, repo)
+		}
+	}
+
+	return append(append(quicksort(less), pivot), quicksort(greater)...)
 }
 
 func getGoodFirstIssues(org string) []IssueStub {
@@ -48,36 +70,32 @@ func getGoodFirstIssues(org string) []IssueStub {
 	// Set up a loop to retrieve all repositories in the organization
 	for {
 		// Perform the search for repositories
-		repos, resp, err := client.Repositories.ListByOrg(context.Background(), org, repoOpt)
+		repos, _, err := client.Repositories.ListByOrg(context.Background(), org, repoOpt)
 		if err != nil {
 			log.Fatal(err)
 		}
-
+		repos = quicksort(repos)
 		// Iterate over the repositories
-		for _, repo := range repos {
+		for i := 0; i < 10; i++ {
+			repo := repos[i]
 			// Set up a loop to retrieve all issues for the repository
-			for {
-				// Perform the search for issues
-				result, resp, err := client.Issues.ListByRepo(context.Background(), org, *repo.Name, issueOpt)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				// Add the issues to the slice
-				issues = append(issues, result...)
-
-				// Check if there are more pages of results
-				if resp.NextPage == 0 {
-					break
-				}
-				issueOpt.Page = resp.NextPage
+			// Perform the search for issues
+			result, resp, err := client.Issues.ListByRepo(context.Background(), org, *repo.Name, issueOpt)
+			if err != nil {
+				log.Fatal(err)
 			}
+
+			// Add the issues to the slice
+			issues = append(issues, result...)
+
+			// Check if there are more pages of results
+			if resp.NextPage == 0 {
+				break
+			}
+			issueOpt.Page = resp.NextPage
 		}
 		// Check if there are more pages of results
-		if resp.NextPage == 0 {
-			break
-		}
-		repoOpt.Page = resp.NextPage
+		break
 	}
 
 	// Print the number of issues
@@ -86,10 +104,6 @@ func getGoodFirstIssues(org string) []IssueStub {
 	targetIssues := []IssueStub{}
 	// Print the issue details
 	for _, issue := range issues {
-		// Recent issues
-		if time.Since(*issue.CreatedAt) > time.Hour*14 {
-			continue
-		}
 		for _, label := range issue.Labels {
 			if *label.Name == "good first issue" {
 				newIssue := IssueStub{
