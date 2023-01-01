@@ -33,6 +33,12 @@
   text-decoration: underline;
 }
 
+.flexbox-centered-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
 	</style>
 	<title>Issue List</title>
 </head>
@@ -42,6 +48,7 @@
 	<p>
 		This page lists all issues labeled "good first issue" in the order in which they were created. Most recent first. Hope this helps someone!!
 	</p>
+	<div class="flexbox-centered-container">
 	{{range .Issues}}
 		<div class="issue-title">
 			<h2 class="issue-title">{{.Title}} ocurring at {{.CreatedAt}}</h2>
@@ -49,6 +56,7 @@
 			<a class="issue-link" target="_blank" href="{{.Url}}">View on GitHub</a>
 		</div>
 	{{end}}
+	</div>
 </body>
 </html>
 

@@ -16,3 +16,7 @@ Then start up with server with
 ```
 go run main.go
 ```
+
+then you will have a list of github issues :) 
+
+![](https://ibb.co/Mf87QD4)
