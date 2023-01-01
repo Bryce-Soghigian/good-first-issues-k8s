@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Issue List</title>
+</head>
+<body>
+	<h1>Issue List</h1>
+	{{range .Issues}}
+		<div>
+			<h2>{{.Title}}</h2>
+			<p>{{.Body}}</p>
+			<a href="{{.URL}}">View on GitHub</a>
+			<span style="color: #{{.Label.Color}};">{{.Label.Name}}</span>
+		</div>
+
