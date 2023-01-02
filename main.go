@@ -3,16 +3,18 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/google/go-github/github"
-	"golang.org/x/oauth2"
 	"html/template"
 	"kube_a_day/sorting"
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/google/go-github/github"
+	"golang.org/x/oauth2"
 )
 
-func getGoodFirstIssues(org string) []sorting.IssueStub {
+func getGoodFirstIssues(org string, cache map[string]sorting.IssueStub) []sorting.IssueStub {
 	pat := os.Getenv("GITHUB_PAT")
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: pat},
@@ -64,13 +66,19 @@ func getGoodFirstIssues(org string) []sorting.IssueStub {
 
 					// check how many pull requests are associated with this issue
 					if issue.PullRequestLinks == nil || *issue.PullRequestLinks.URL == "" && issue.Labels != nil && findTargetLabels(issue.Labels) {
-						issues = append(issues, sorting.IssueStub{
+						if val, isPresent := cache[issue.GetHTMLURL()]; isPresent {
+							issues = append(issues, val)
+							continue
+						}
+						validIssue := sorting.IssueStub{
 							Title:     *issue.Title,
 							Body:      issue.GetBody(),
 							Url:       issue.GetHTMLURL(),
 							Labels:    issue.Labels,
 							CreatedAt: issue.GetCreatedAt(),
-						})
+						}
+						cache[validIssue.Url] = validIssue
+						issues = append(issues, validIssue)
 						fmt.Println(*issue.Title)
 					}
 				}
@@ -100,9 +108,20 @@ func findTargetLabels(labels []github.Label) bool {
 	return false
 }
 
+func updateIssues(issues *[]sorting.IssueStub, cache map[string]sorting.IssueStub) {
+	for {
+		time.Sleep(24 * time.Hour)
+		*issues = getGoodFirstIssues("kubernetes", cache)
+		fmt.Println("issues updated")
+	}
+}
+
 func main() {
 	// k8sSigs := getGoodFirstIssues("kubernetes-sigs")
-	k8s := getGoodFirstIssues("kubernetes")
+	cache := map[string]sorting.IssueStub{}
+	k8s := getGoodFirstIssues("kubernetes", cache)
+	// launch go routine to ocassionally update the values
+	go updateIssues(&k8s, cache)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Set up the data for the template
 		data := struct {
